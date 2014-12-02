@@ -16,10 +16,12 @@
  */
 package async.nio2;
 
+import static async.nio2.Client.newClient;
+import static java.util.stream.Collectors.toList;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -27,17 +29,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 public class Main {
 
 	private static int PORT = 24089;
-	private static int NO_CLIENTS = 100;
-	public static int NO_SAMPLES = 500;
+	private static int NO_CLIENTS = 10;
+	public static int NO_SAMPLES = 100;
 
-	public static void main(String[] args) throws IOException,
-			InterruptedException, ExecutionException {
+	public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
 
 		if (args.length == 3) {
 			PORT = Integer.valueOf(args[0]);
@@ -66,13 +68,10 @@ public class Main {
 		InetSocketAddress isa = new InetSocketAddress("localhost", PORT);
 		Server.newInstance(isa, groupServer);
 
-		List<Client> clients = new ArrayList<>();
-		for (int i = 0; i < NO_CLIENTS; i++)
-			clients.add(Client.newClient(isa, groupClient));
-
+		List<Client> clients = IntStream.range(0, NO_CLIENTS).mapToObj(i -> newClient(isa, groupClient)).collect(toList());
+		
 		final ExecutorService es = Executors.newFixedThreadPool(2);
-		final List<Future<Long[]>> futures = new ArrayList<>();
-		clients.forEach(client -> futures.add(es.submit(client)));
+		final List<Future<Long[]>> futures = clients.stream().map(client -> es.submit(client)).collect(toList());
 
 		System.out.printf("%03d clients on localhost:%d, %03d runs each. All times in µs.%n", NO_CLIENTS, PORT, NO_SAMPLES);
 		final DescriptiveStatistics stats = new DescriptiveStatistics();

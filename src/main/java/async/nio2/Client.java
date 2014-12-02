@@ -16,6 +16,8 @@
  */
 package async.nio2;
 
+import static async.nio2.Main.NO_SAMPLES;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -23,33 +25,31 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Random;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-
-import static async.nio2.Main.NO_SAMPLES;
 
 public class Client implements Callable<Long[]>, AutoCloseable {
 
 	private final Random r = new Random();
 	private static final int MAX = Integer.MAX_VALUE / 2;
 
-	private final AsynchronousSocketChannel asc;
-
-	private Client(AsynchronousSocketChannel asc) {
-		this.asc = asc;
+	private final AsynchronousChannelGroup group;
+	private final InetSocketAddress isa;
+	
+	private AsynchronousSocketChannel asc;
+	
+	private Client(InetSocketAddress isa, AsynchronousChannelGroup group) {
+		this.group = group;
+		this.isa = isa;
 	}
 
-	public static Client newClient(InetSocketAddress isa, AsynchronousChannelGroup group) throws IOException {
-		AsynchronousSocketChannel asc = AsynchronousSocketChannel.open(group);
-		try {
-			asc.connect(isa).get();
-		} catch (InterruptedException | ExecutionException e) {
-			e.printStackTrace();
-		}
-		return new Client(asc);
+	public static Client newClient(InetSocketAddress isa, AsynchronousChannelGroup group) {
+		return new Client(isa, group);
 	}
 
 	@Override
 	public Long[] call() throws Exception {
+		this.asc = AsynchronousSocketChannel.open(group);
+		asc.connect(isa).get();
+		
 		Long[] runs = new Long[NO_SAMPLES];
 
 		int[] numbers = new int[NO_SAMPLES];
