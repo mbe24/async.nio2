@@ -17,17 +17,14 @@
 package async.nio2;
 
 import static async.nio2.Client.newClient;
-import static java.util.stream.Collectors.toList;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
-import java.util.Arrays;
-import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
@@ -61,45 +58,50 @@ public class Main {
 			System.err.println("Error: #samples < 1");
 			System.exit(1);
 		}
+		
+		System.out.printf("%03d clients on localhost:%d, %03d runs each. All times in µs.%n", NO_CLIENTS, PORT, NO_SAMPLES);
 
 		AsynchronousChannelGroup groupServer = AsynchronousChannelGroup.withThreadPool(Executors.newFixedThreadPool(1));
 		AsynchronousChannelGroup groupClient = AsynchronousChannelGroup.withThreadPool(Executors.newFixedThreadPool(1));
 
 		InetSocketAddress isa = new InetSocketAddress("localhost", PORT);
-		Server.newInstance(isa, groupServer);
-
-		List<Client> clients = IntStream.range(0, NO_CLIENTS).mapToObj(i -> newClient(isa, groupClient)).collect(toList());
+		Server server = Server.newInstance(isa, groupServer);
 		
-		final ExecutorService es = Executors.newFixedThreadPool(2);
-		final List<Future<Long[]>> futures = clients.stream().map(client -> es.submit(client)).collect(toList());
-
-		System.out.printf("%03d clients on localhost:%d, %03d runs each. All times in µs.%n", NO_CLIENTS, PORT, NO_SAMPLES);
-		final DescriptiveStatistics stats = new DescriptiveStatistics();
-		futures.forEach(f -> {
-			try {
-				Arrays.asList(Arrays.asList(f.get())).forEach(
-						list -> {
-							list.stream().forEach(l -> stats.addValue(l / 1000d));
-							System.out.printf("0.50 Percentile  = %8.2f, "
-									+ "0.90 Percentile = %8.2f, "
-									+ "0.99 Percentile = %8.2f, "
-									+ "min = %8.2f, " + "max = %8.2f%n",
-									stats.getMean(), stats.getPercentile(90),
-									stats.getPercentile(99), stats.getMin(),
-									stats.getMax());
-							stats.clear();
-						});
-			} catch (ExecutionException | InterruptedException e) {
-				e.printStackTrace();
-			}
-		});
-
-		groupClient.shutdownNow();
-		groupClient.awaitTermination(1, TimeUnit.SECONDS);
-
-		groupServer.shutdownNow();
-		groupServer.awaitTermination(1, TimeUnit.SECONDS);
+		ExecutorService es = Executors.newFixedThreadPool(2);
+		
+		IntStream.range(0, NO_CLIENTS).unordered().parallel()
+		.mapToObj(i -> newClient(isa, groupClient))
+		.map(c -> CompletableFuture.supplyAsync(c, es))
+		.map(future -> future.join())
+		.map(Main::collectStats)
+		.map(Main::toEvaluationString)
+		.forEach(System.out::println);
 
 		es.shutdown();
+		es.awaitTermination(5, TimeUnit.SECONDS);
+		
+		groupClient.shutdown();
+		groupClient.awaitTermination(5, TimeUnit.SECONDS);
+		
+		server.close();
+		groupServer.shutdown();
+		groupServer.awaitTermination(5, TimeUnit.SECONDS);
+	}
+	
+	private static DescriptiveStatistics collectStats(Long[] data) {
+		DescriptiveStatistics stats = new DescriptiveStatistics();
+		for (Long l : data)
+			stats.addValue(l / 1000d);
+		return stats;
+	}
+	
+	private static String toEvaluationString(DescriptiveStatistics stats) {
+		return String.format("0.50 Percentile  = %8.2f, "
+				+ "0.90 Percentile = %8.2f, "
+				+ "0.99 Percentile = %8.2f, "
+				+ "min = %8.2f, " + "max = %8.2f",
+				stats.getMean(), stats.getPercentile(90),
+				stats.getPercentile(99), stats.getMin(),
+				stats.getMax());
 	}
 }

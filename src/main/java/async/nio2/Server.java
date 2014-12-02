@@ -35,7 +35,7 @@ public class Server implements AutoCloseable {
 		AsynchronousServerSocketChannel assc = AsynchronousServerSocketChannel.open(group).bind(isa);
 		AcceptHandler handler = new AcceptHandler(assc);
 		assc.accept(ChannelState.newInstance(), handler);
-		return null;
+		return new Server(assc);
 	}
 
 	@Override

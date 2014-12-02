@@ -25,8 +25,9 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
-public class Client implements Callable<Long[]>, AutoCloseable {
+public class Client implements Callable<Long[]>, Supplier<Long[]>, AutoCloseable {
 
 	private final Random r = new Random();
 	private static final int MAX = Integer.MAX_VALUE / 2;
@@ -84,7 +85,18 @@ public class Client implements Callable<Long[]>, AutoCloseable {
 	}
 
 	@Override
+	public Long[] get() {
+		try {
+			return call();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return new Long[0];
+	}
+	
+	@Override
 	public void close() throws IOException {
 		asc.close();
 	}
+
 }
