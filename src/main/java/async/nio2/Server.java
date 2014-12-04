@@ -38,6 +38,10 @@ public class Server implements AutoCloseable {
 		return new Server(assc);
 	}
 
+	public InetSocketAddress getLocalAddress() throws IOException {
+		return (InetSocketAddress) assc.getLocalAddress();
+	}
+
 	@Override
 	public void close() throws IOException {
 		assc.close();

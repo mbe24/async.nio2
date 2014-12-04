@@ -98,5 +98,4 @@ public class Client implements Callable<Long[]>, Supplier<Long[]>, AutoCloseable
 	public void close() throws IOException {
 		asc.close();
 	}
-
 }
